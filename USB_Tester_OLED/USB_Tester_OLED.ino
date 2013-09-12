@@ -60,6 +60,9 @@ so action happens after button is let go
 -Added 2nd printJustified function for decimal
 -Now mWh and mAh use decimals
 
+2013.09.12 - Rod Whitby
+- Added support for reading and displaying D+ and D- voltages
+
 **************************************/
 
 #include <Wire.h>
@@ -106,6 +109,10 @@ int autoscale_countdown = GRAPH_MEMORY;
 //Button
 const int btnPin = 10;
 ClickButton modeBtn(btnPin, HIGH);
+
+// D+/D-
+const int dPlusPin = A4;
+const int dMinusPin = A5;
 
 //Current Sensor
 Adafruit_INA219 ina219;
@@ -164,6 +171,9 @@ volatile float loadvoltage = 0;
 volatile float milliwatthours = 0;
 volatile float milliamphours = 0;
 
+volatile float dplusvoltage = 0;
+volatile float dminusvoltage = 0;
+
 // Keep track of peak/min significant values:
 volatile float peakCurrent = 0;
 volatile float voltageAtPeakCurrent = 0;
@@ -173,6 +183,10 @@ volatile float currentAtMinVoltage = 0;
 volatile float voltageAtPeakPower = 0;
 volatile float currentAtPeakPower = 0;
 
+volatile float peakDPlusVoltage = 0;
+volatile float minDPlusVoltage = 10;
+volatile float peakDMinusVoltage = 0;
+volatile float minDMinusVoltage = 10;
 
 
 // Global defines for polling frequency:
@@ -180,14 +194,14 @@ volatile float currentAtPeakPower = 0;
 
 // Multiple screen support
 int current_screen = 0;
-#define MAX_SCREENS  6;
+#define MAX_SCREENS  7;
 
 //Display message handling
 unsigned int setDisplayTime = 0;
 char setMsgDisplay[10];
 int oldScreen = 0;
 bool msgDisplay = false;
-#define msgScreen 6;
+#define msgScreen 10;
 
 /**
   Setting the last "X" seconds: use the serial link to set this up, and store value in eeprom ?
@@ -277,6 +291,8 @@ void readADCs() {
   loadvoltage = busvoltage + (shuntvoltage / 1000);
   milliwatthours += busvoltage*current_mA*READFREQ/1e6/3600; // 1 Wh = 3600 joules
   milliamphours += current_mA*READFREQ/1e6/3600;
+  dplusvoltage = analogRead(dPlusPin) * 5.0 / 1024;
+  dminusvoltage = analogRead(dMinusPin) * 5.0 / 1024;
   
   // Update peaks and mins
   if (current_mA > peakCurrent) {
@@ -295,6 +311,22 @@ void readADCs() {
       currentAtPeakPower = current_mA;
   }
   
+  if (dplusvoltage > peakDPlusVoltage) {
+      peakDPlusVoltage = dplusvoltage;
+  }
+
+  if (dplusvoltage < minDPlusVoltage) {
+      minDPlusVoltage = dplusvoltage;
+  }
+
+  if (dminusvoltage > peakDMinusVoltage) {
+      peakDMinusVoltage = dminusvoltage;
+  }
+
+  if (dminusvoltage < minDMinusVoltage) {
+      minDMinusVoltage = dminusvoltage;
+  }
+
 #ifdef DEBUG
       clearpin(PORTD,5);  // Just a debug signal for my scope to check
                         // how long it takes for the loop below to complete
@@ -345,7 +377,11 @@ void loop()
        drawBig(loadvoltage, "V",2);
        drawBottomLine();
        break;
-    case 6: //This is a special screen only called within the sketch to take over display with user message
+    case 6:
+       drawDPlusDMinus();
+       drawBottomLine();
+       break;
+    case 10: //This is a special screen only called within the sketch to take over display with user message
        drawMsg();
        break;
     default:
@@ -459,6 +495,21 @@ void drawPeakMins() {
   display.print(currentAtMinVoltage);
   display.print("mA)");
   
+  display.drawFastHLine(0,23,128,WHITE);
+
+}
+
+// Displays D+ and D- values
+void drawDPlusDMinus() {
+  display.setCursor(0,0);
+  display.print("D+:");
+  display.print(dplusvoltage, 2);
+  display.print("V");
+  display.setCursor(0,9);
+  display.print("D-:");
+  display.print(dminusvoltage, 2);
+  display.print("V");
+
   display.drawFastHLine(0,23,128,WHITE);
 
 }
